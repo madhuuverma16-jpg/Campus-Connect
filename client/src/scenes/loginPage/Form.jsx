@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   Box,
   Button,
+  Alert,
   TextField,
   useMediaQuery,
   Typography,
@@ -48,6 +49,7 @@ const initialValuesLogin = {
 
 const Form = () => {
   const [pageType, setPageType] = useState("login");
+  const [feedback, setFeedback] = useState(null);
   const { palette } = useTheme();
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -56,48 +58,84 @@ const Form = () => {
   const isRegister = pageType === "register";
 
   const register = async (values, onSubmitProps) => {
-    // this allows us to send form info with image
-    const formData = new FormData();
-    for (let value in values) {
-      formData.append(value, values[value]);
-    }
-    formData.append("picturePath", values.picture.name);
+    try {
+      const formData = new FormData();
+      for (let value in values) {
+        formData.append(value, values[value]);
+      }
+      formData.append("picturePath", values.picture.name);
 
-    const savedUserResponse = await fetch(
-      "http://localhost:3001/auth/register",
-      {
+      const response = await fetch("http://localhost:3001/auth/register", {
         method: "POST",
         body: formData,
-      }
-    );
-    const savedUser = await savedUserResponse.json();
-    onSubmitProps.resetForm();
+      });
+      const result = await response.json();
 
-    if (savedUser) {
-      setPageType("login");
+      if (!response.ok) {
+        setFeedback({
+          severity: "error",
+          message: result.msg || result.error || "Registration failed.",
+        });
+        return;
+      }
+
+      onSubmitProps.resetForm();
+      if (!result.user || !result.token) {
+        setFeedback({
+          severity: "error",
+          message: "Account was created, but the server returned an invalid login response.",
+        });
+        return;
+      }
+
+      dispatch(setLogin({ user: result.user, token: result.token }));
+      navigate("/home");
+    } catch {
+      setFeedback({
+        severity: "error",
+        message: "Could not connect to the server. Please try again.",
+      });
     }
   };
 
   const login = async (values, onSubmitProps) => {
-    const loggedInResponse = await fetch("http://localhost:3001/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(values),
-    });
-    const loggedIn = await loggedInResponse.json();
-    onSubmitProps.resetForm();
-    if (loggedIn) {
-      dispatch(
-        setLogin({
-          user: loggedIn.user,
-          token: loggedIn.token,
-        })
-      );
+    try {
+      const response = await fetch("http://localhost:3001/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        setFeedback({
+          severity: "error",
+          message: result.msg || result.error || "Login failed.",
+        });
+        return;
+      }
+
+      if (!result.user || !result.token) {
+        setFeedback({
+          severity: "error",
+          message: "The server returned an invalid login response.",
+        });
+        return;
+      }
+
+      onSubmitProps.resetForm();
+      dispatch(setLogin({ user: result.user, token: result.token }));
       navigate("/home");
+    } catch {
+      setFeedback({
+        severity: "error",
+        message: "Could not connect to the server. Please try again.",
+      });
     }
   };
 
   const handleFormSubmit = async (values, onSubmitProps) => {
+    setFeedback(null);
     if (isLogin) await login(values, onSubmitProps);
     if (isRegister) await register(values, onSubmitProps);
   };
@@ -119,6 +157,11 @@ const Form = () => {
         resetForm,
       }) => (
         <form onSubmit={handleSubmit}>
+          {feedback && (
+            <Alert severity={feedback.severity} sx={{ mb: "1rem" }}>
+              {feedback.message}
+            </Alert>
+          )}
           <Box
             display="grid"
             gap="30px"
@@ -250,6 +293,7 @@ const Form = () => {
             <Typography
               onClick={() => {
                 setPageType(isLogin ? "register" : "login");
+                setFeedback(null);
                 resetForm();
               }}
               sx={{

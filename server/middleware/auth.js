@@ -2,6 +2,14 @@ import jwt from "jsonwebtoken";
 
 export const verifyToken = async (req, res, next) => {
   try {
+    const jwtSecret = process.env.JWT_SECRET;
+
+    if (!jwtSecret) {
+      return res
+        .status(500)
+        .json({ msg: "Server configuration error: JWT_SECRET is missing." });
+    }
+
     let token = req.header("Authorization");
 
     if (!token) {
@@ -12,7 +20,7 @@ export const verifyToken = async (req, res, next) => {
       token = token.slice(7, token.length).trimLeft();
     }
 
-    const verified = jwt.verify(token, process.env.JWT_SECRET);
+    const verified = jwt.verify(token, jwtSecret);
     req.user = verified;
     next();
   } catch (err) {
